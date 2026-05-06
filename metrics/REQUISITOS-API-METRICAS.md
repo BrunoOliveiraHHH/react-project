@@ -16,16 +16,13 @@ relatórios à mão.
 **Solução proposta neste doc**: API local em Spring para persistir as
 demandas e gerar CSV/PDF mensal automaticamente.
 
-**Solução alternativa que NÃO foi escolhida**: continuar com CSV manual +
-Sheets + Pandoc. É **mais barato** e resolve o problema. Esta API só vale
-se houver intenção paralela de **praticar Spring** e/ou **acumular tempo
-poupado** depois de algumas iterações. Se isso não for verdade, releia o
-[ON-DEMAND.md](../ON-DEMAND.md): você está procrastinando trabalho real
-com codificação confortável.
+**Por que API e não CSV manual**: motivação. Registrar via formulário web é
+mais leve do que abrir planilha; é o suficiente para garantir que você
+realmente vá registrar todo dia.
 
 **Critério para parar este projeto**: se em **3 meses** você ainda não
-mandou nenhum relatório mensal usando esta API (mesmo que a API esteja
-pronta), o problema não era ferramenta. Volta para CSV.
+mandou nenhum relatório mensal usando esta API, o problema não era
+ferramenta. Volta para CSV.
 
 ---
 
@@ -36,8 +33,9 @@ pronta), o problema não era ferramenta. Volta para CSV.
 - **Banco**: PostgreSQL local já existente.
 - **Stack desejada**: Spring Boot 4 + Java 21 (mesma do projeto ERP, reaproveita
   conhecimento).
-- **Frontend**: opcional. MVP pode ser só API + scripts/curl. Depois pode ganhar
-  UI React reaproveitando padrões do `react-project/frontend`.
+- **UI**: HTML estático servido pelo próprio Spring (`src/main/resources/static/`),
+  com **Bootstrap 5** (CDN) + **Tabulator** (CDN) + **vanilla JS** consumindo os
+  REST endpoints. Sem Thymeleaf, sem build tool, sem framework SPA.
 
 ---
 
@@ -70,12 +68,18 @@ pronta), o problema não era ferramenta. Volta para CSV.
 
 ### 4.1 Cadastro / atualização de demanda
 
-- **RF-01** Cadastrar demanda com: id Teamwork (string), título, time
-  solicitante, impacto (P1/P2/P3), data de abertura.
+- **RF-01** Cadastrar demanda com: id Teamwork (string), título, **nome do
+  solicitante** (pessoa), time solicitante (equipe), impacto (P1/P2/P3),
+  data de abertura.
 - **RF-02** Atualizar demanda com: tipo, data de fechamento, horas trabalhadas,
   retrabalho (sim/não), destaque (sim/não), observações.
-- **RF-03** Listar demandas com filtros: período, time, tipo, impacto,
-  retrabalho, destaque.
+- **RF-03** Listar demandas com **paginação** e **filtros**:
+  - código da tarefa (`id_teamwork`, busca parcial)
+  - nome do solicitante (busca parcial)
+  - equipe solicitante (busca parcial ou exata)
+  - período: data início + data fim (sobre `data_abertura`)
+  - opcionalmente: tipo, impacto, retrabalho, destaque (filtros extras
+    úteis para o relatório, mas não estritamente exigidos na tela).
 - **RF-04** Editar campo individual (correção de classificação).
 - **RF-05** Excluir demanda (raro; útil para teste).
 
@@ -96,7 +100,12 @@ pronta), o problema não era ferramenta. Volta para CSV.
   - Distribuição por tipo (qtd e %).
   - Distribuição por time (qtd e horas).
   - Lista de destaques (`destaque=sim`).
-- **RF-09** Exportar relatório como **CSV** (uma linha por demanda do mês).
+- **RF-09** Exportar dados via **modal de exportação único** com seleção de:
+  - **Formato**: `PDF` ou `CSV`
+  - **Período**: `mensal` (escolhe mês/ano) | `diário` (hoje do sistema) |
+    `dia específico` (escolhe a data) | `período personalizado` (início + fim)
+  - O botão "Exportar" na tela principal apenas abre este modal; ele que
+    decide qual endpoint chamar.
 - **RF-10** Exportar relatório como **PDF** seguindo o template
   [`relatorio-mensal-template.md`](relatorio-mensal-template.md), com
   números preenchidos.
@@ -119,12 +128,11 @@ pronta), o problema não era ferramenta. Volta para CSV.
 | ----- | ------------------------------------------------------------------------ |
 | RNF-1 | API responde em ≤ 200ms para operações de CRUD (volume baixo).           |
 | RNF-2 | Banco PostgreSQL existente, schema próprio (`metricas`).                 |
-| RNF-3 | Autenticação básica (API token simples ou Spring Security com user único). Não tem usuário externo. |
-| RNF-4 | Logs estruturados, mas sem PII (nem precisa, é dado seu).                |
-| RNF-5 | Backup do banco semanal (`pg_dump` cron) — dado é insubstituível.        |
-| RNF-6 | Rodar local via `mvn spring-boot:run` ou `docker compose up`.            |
-| RNF-7 | Health check `/actuator/health` para auto-monitoramento.                 |
-| RNF-8 | Swagger UI em `/swagger-ui.html` (boa prática + você já usa).            |
+| RNF-3 | **Sem autenticação**. Uso pessoal, máquina local, single-user. Não exposto à rede. |
+| RNF-4 | Backup do banco semanal (`pg_dump` cron) — dado é insubstituível.        |
+| RNF-5 | Rodar local via `mvn spring-boot:run`.                                   |
+| RNF-6 | Health check `/actuator/health` opcional.                                |
+| RNF-7 | Swagger UI em `/swagger-ui.html` para teste durante desenvolvimento.     |
 
 ---
 
@@ -135,7 +143,8 @@ demanda
 ├── id (PK, BIGSERIAL)
 ├── id_teamwork (UNIQUE, VARCHAR 40)
 ├── titulo (VARCHAR 255)
-├── time_id (FK -> time.id)
+├── nome_solicitante (VARCHAR 120)             -- pessoa que abriu
+├── time_id (FK -> time.id)                    -- equipe da pessoa
 ├── tipo_id (FK -> tipo.id, NULLABLE — define ao fechar)
 ├── impacto_id (FK -> impacto.id)
 ├── data_abertura (DATE NOT NULL)
@@ -175,12 +184,15 @@ impacto
 
 ### Demandas
 - `POST /api/demandas` — cadastro inicial.
-- `GET /api/demandas?inicio=2026-05-01&fim=2026-05-31&time=A&tipo=bug` — listagem com filtros.
+- `GET /api/demandas?codigo=...&solicitante=...&time=...&inicio=2026-05-01&fim=2026-05-31&page=0&size=20`
+  — listagem paginada com filtros (todos opcionais; combináveis).
 - `GET /api/demandas/{id}` — detalhe.
 - `PUT /api/demandas/{id}` — atualizar (fechamento ou correção).
-- `PATCH /api/demandas/{id}/fechar` — atalho para fechamento, recebe só os
-  campos do encerramento.
+- `PATCH /api/demandas/{id}/fechar` — atalho para fechamento.
 - `DELETE /api/demandas/{id}` — exclusão.
+
+Resposta da listagem usa envelope de paginação `PaginaDto<T>` (mesmo
+padrão do projeto ERP).
 
 ### Importação
 - `POST /api/demandas/importar-csv` — upload do CSV existente.
@@ -190,25 +202,74 @@ impacto
 - `GET /api/impactos` · `POST /api/impactos`
 - `GET /api/times` · `POST /api/times`
 
-### Relatório
-- `GET /api/relatorios/mensal?ano=2026&mes=5` — JSON.
-- `GET /api/relatorios/mensal/csv?ano=2026&mes=5` — CSV download.
-- `GET /api/relatorios/mensal/pdf?ano=2026&mes=5` — PDF download.
-- `GET /api/relatorios/throughput?meses=6` — série temporal.
+### Relatório / Exportação
+
+Dois "tipos" de saída convivem:
+
+**a) Relatório estruturado mensal (rico, com totais e narrativa):**
+- `GET /api/relatorios/mensal?ano=2026&mes=5` — JSON agregado do mês.
+- `GET /api/relatorios/mensal/pdf?ano=2026&mes=5` — PDF estruturado.
+
+**b) Exportação por período (listagem tabular, qualquer faixa de datas):**
+- `GET /api/exportar/pdf?inicio=2026-05-01&fim=2026-05-01` — PDF tabular.
+- `GET /api/exportar/csv?inicio=2026-05-01&fim=2026-05-31` — CSV tabular.
+- Ambos aceitam também os filtros da tela: `codigo`, `solicitante`, `time`.
+
+**Mapa do modal → endpoint:**
+
+| Opção do modal       | Formato | Endpoint                                   | Parâmetros                |
+| -------------------- | ------- | ------------------------------------------ | ------------------------- |
+| Mensal               | PDF     | `/api/relatorios/mensal/pdf`               | `ano`, `mes`              |
+| Mensal               | CSV     | `/api/exportar/csv`                        | `inicio` = 1º do mês, `fim` = último do mês |
+| Diário (hoje)        | PDF     | `/api/exportar/pdf`                        | `inicio` = `fim` = hoje   |
+| Diário (hoje)        | CSV     | `/api/exportar/csv`                        | `inicio` = `fim` = hoje   |
+| Dia específico       | PDF     | `/api/exportar/pdf`                        | `inicio` = `fim` = data escolhida |
+| Dia específico       | CSV     | `/api/exportar/csv`                        | `inicio` = `fim` = data escolhida |
+| Período personalizado| PDF     | `/api/exportar/pdf`                        | `inicio`, `fim`           |
+| Período personalizado| CSV     | `/api/exportar/csv`                        | `inicio`, `fim`           |
 
 ---
 
-## 8. Geração de PDF — abordagem
+## 8. UI estática + geração de PDF
 
-Avaliar (em ordem de simplicidade):
+### UI da aplicação (`src/main/resources/static/`)
 
-1. **OpenPDF / iText 7** — gerar PDF programaticamente. Mais código, mais controle.
-2. **Thymeleaf + Flying Saucer / Open HTML to PDF** — renderiza HTML → PDF.
-   Mais natural para layout tipo relatório.
-3. **JasperReports** — overkill aqui. Pular.
+Single-page **sem framework**, apenas:
 
-**Recomendação**: opção 2 (Flying Saucer). Você já mexe com templates;
-HTML/CSS é mais flexível que API gráfica.
+- `index.html` — layout único com:
+  - **Bloco superior**: formulário de cadastro/edição (campos da demanda +
+    botão Salvar + botão Limpar).
+  - **Bloco de filtros**: código da tarefa, nome do solicitante, equipe,
+    período (data início + data fim) + botões "Filtrar" e "Limpar filtros".
+  - **Botão "Exportar"** que abre um **modal único** com:
+    - radio do **formato**: PDF / CSV
+    - radio do **período**: Mensal | Diário (hoje) | Dia específico | Período
+    - campos contextuais (mês/ano, data, datas inicio/fim) habilitam
+      conforme a opção escolhida
+    - botão "Baixar" que dispara o download.
+  - **Datatable** com paginação no rodapé, listando os registros filtrados.
+  - **Modal de edição** que abre ao clicar numa linha.
+- `app.js` — vanilla JavaScript com `fetch()` para chamar `/api/...`.
+- `app.css` — estilos próprios (mínimos; Bootstrap cobre o resto).
+
+### Bibliotecas via CDN (sem build, sem npm)
+
+- **Bootstrap 5** — layout, formulários, modais, botões, alerts.
+- **Tabulator** — datatable com paginação, sort, filtros opcionais por coluna.
+- **Sem jQuery, sem React, sem build tool.** `<script src="...cdn..."></script>`.
+
+### PDF mensal
+
+Em vez de Thymeleaf, usar uma das opções leves:
+
+1. **Mustache + Flying Saucer** — Mustache (Spring Boot tem starter) renderiza
+   HTML, Flying Saucer converte para PDF. Recomendado.
+2. **OpenPDF / iText 7** — programático. Mais código, mais controle, sem template.
+3. **Construir HTML manualmente em Java** (`String.format` + `StringBuilder`)
+   e passar pra Flying Saucer. Funciona, mas vira gambiarra rápido.
+
+**Recomendação**: opção 1 (Mustache + Flying Saucer). Mantém template separado
+do código, sem trazer Thymeleaf inteiro só para PDF.
 
 ---
 
@@ -274,47 +335,58 @@ Se algum destes virar essencial, vira ticket separado **depois** do MVP em uso.
 - Banco + Flyway com migrations iniciais.
 - Smoke test: API sobe, Swagger acessível.
 
-### Fase 1 — MVP usável (escopo mínimo) — ~2-3 dias úteis
-- CRUD básico de demandas + catálogos.
-- Importação do CSV existente.
-- Relatório mensal em **JSON** (sem PDF ainda).
-- Critério de aceite: registrar demanda nova via Swagger, listar, e gerar
-  JSON do mês.
+### Fase 1 — Backend mínimo
+- CRUD de demandas + catálogos (tipo, impacto, time).
+- Listagem com filtros e paginação (`/api/demandas` com filtros da tela).
+- Importação do CSV existente (`/api/demandas/importar-csv`).
+- Critério: dá pra registrar/editar/listar via Swagger.
 
-### Fase 2 — CSV de saída — ~0.5 dia
-- Endpoint que exporta o mês como CSV.
+### Fase 2 — UI estática
+- `index.html` com formulário + filtros + datatable (Tabulator) + modal
+  de edição.
+- `app.js` chamando os endpoints da Fase 1.
+- Critério: você consegue cadastrar e editar **sem** abrir Swagger.
 
-### Fase 3 — PDF — ~1-2 dias
-- Template HTML do relatório.
-- Geração do PDF preenchido.
-- Layout aprovado (você mesmo aprova).
+### Fase 3 — Exportação CSV
+- Modal de exportação (com as 4 opções de período).
+- Endpoint `/api/exportar/csv`.
+- Critério: baixa CSV em todos os 4 modos.
 
-### Fase 4 — Gráficos — ~0.5-1 dia
-- Geração de PNG/SVG dos 3 gráficos.
-- Embutidos no PDF.
+### Fase 4 — Exportação PDF
+- Endpoint `/api/exportar/pdf` (tabular, mesmo template para diário/dia/período).
+- Endpoint `/api/relatorios/mensal/pdf` (template estruturado, com totais).
+- Mustache + Flying Saucer.
+- Critério: baixa PDF mensal estruturado e PDF tabular nos demais modos.
 
-### Fase 5 — UI (opcional, futuro) — ~3-5 dias
-- Reaproveitar padrões do `react-project/frontend`.
-- Telas: lista, cadastro rápido, fechamento rápido, relatório.
+### Fase 5 — Polimento (opcional)
+- Gráficos no PDF mensal.
+- Backup automatizado.
+- Atalhos de teclado na UI.
 
-**Stop em qualquer fase é entrega válida.** A Fase 1 + 2 já é melhor que
-nada. Não precisa terminar tudo para começar a usar.
+**Stop em qualquer fase é entrega válida.** Fase 1 + 2 já substitui o CSV
+manual.
 
 ---
 
 ## 14. Critério de aceite por fase (DoD)
 
-### Fase 1 (MVP)
+### Fase 1 (Backend)
 - [ ] `POST /api/demandas` cria registro válido.
-- [ ] `GET /api/demandas` filtra por mês.
-- [ ] `POST /api/demandas/importar-csv` importa o CSV existente sem erro.
-- [ ] `GET /api/relatorios/mensal` devolve JSON com todos os números do mês.
+- [ ] `GET /api/demandas?codigo=&solicitante=&time=&inicio=&fim=&page=&size=`
+      filtra e pagina corretamente.
+- [ ] `POST /api/demandas/importar-csv` importa sem erro o CSV existente.
 - [ ] Validação retorna `ProblemDetail` (RFC 7807).
 - [ ] Swagger documenta todos os endpoints.
 
-### Fase 3 (PDF)
-- [ ] PDF gerado bate visualmente com o template markdown.
-- [ ] Você consegue mandar pro gerente sem retrabalho.
+### Fase 2 (UI estática)
+- [ ] Formulário cadastra/edita demanda chamando a API.
+- [ ] Datatable lista os registros com paginação.
+- [ ] Filtros (código, solicitante, time, período) refletem na lista.
+- [ ] Modal de edição abre/fecha e salva.
+
+### Fase 4 (PDF)
+- [ ] PDF mensal estruturado bate visualmente com o template markdown.
+- [ ] PDF tabular (período/dia) é legível e imprimível.
 - [ ] Tempo de geração ≤ 5 segundos.
 
 ### Critério global de "pronto pra usar de verdade"
@@ -344,16 +416,18 @@ metricas-api/
 ├── README.md                 # como rodar
 ├── src/main/java/com/bruno/metricas/
 │   ├── MetricasApplication.java
-│   ├── config/               # SecurityConfig, OpenApiConfig
-│   ├── common/               # PaginaDto, exceptions
-│   ├── catalogo/             # Tipo, Impacto, Time (entidade + service + controller)
-│   ├── demanda/              # core: Demanda + Repository + Specs + Service + Controller + Mapper + DTOs
+│   ├── config/               # OpenApiConfig, CorsConfig (sem Security)
+│   ├── common/               # PaginaDto, GlobalExceptionHandler
+│   ├── catalogo/             # Tipo, Impacto, Time
+│   ├── demanda/              # Demanda + Repository + Specs + Service + Controller + Mapper + DTOs
 │   ├── importacao/           # CSV importer
-│   └── relatorio/            # ReportService + PdfRenderer + CsvExporter + ChartGenerator
+│   ├── exportacao/           # CsvExporter + PdfExporter (tabular)
+│   └── relatorio/            # ReportService + PdfMensal (estruturado, Mustache)
 └── src/main/resources/
     ├── application.yml
     ├── db/migration/         # Flyway
-    └── templates/            # relatorio.html (Thymeleaf)
+    ├── static/               # index.html, app.js, app.css (UI servida pelo Spring)
+    └── templates/            # mustache templates do PDF mensal
 ```
 
 ---
