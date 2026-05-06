@@ -1,0 +1,64 @@
+{
+  "app": {
+    "title": "Store ERP",
+    "logout": "Log out"
+  },
+  "menu": {
+    "dashboard": "Dashboard",
+    "produtos": "Products",
+    "clientes": "Customers",
+    "categorias": "Categories",
+    "vendas": "Sales"
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "username": "Username",
+      "senha": "Password",
+      "entrar": "Sign in",
+      "erro": "Invalid username or password"
+    }
+  },
+  "dashboard": {
+    "titulo": "Dashboard",
+    "totalProdutos": "Products",
+    "totalClientes": "Customers",
+    "vendasHoje": "Sales today",
+    "faturamentoHoje": "Revenue today"
+  },
+  "comum": {
+    "novo": "New",
+    "editar": "Edit",
+    "remover": "Remove",
+    "salvar": "Save",
+    "cancelar": "Cancel",
+    "filtrar": "Filter",
+    "limpar": "Clear",
+    "buscar": "Search",
+    "acoes": "Actions",
+    "carregando": "Loading...",
+    "vazio": "No records found",
+    "confirmar": "Confirm",
+    "confirmacaoRemocao": "Are you sure you want to remove this record?"
+  },
+  "campos": {
+    "nome": "Name",
+    "descricao": "Description",
+    "sku": "SKU",
+    "preco": "Price",
+    "estoque": "Stock",
+    "categoria": "Category",
+    "cpf": "Tax ID",
+    "email": "E-mail",
+    "telefone": "Phone",
+    "cliente": "Customer",
+    "produto": "Product",
+    "quantidade": "Quantity",
+    "valorTotal": "Total",
+    "dataVenda": "Sale date",
+    "dataInicio": "Start date",
+    "dataFim": "End date",
+    "precoMin": "Min price",
+    "precoMax": "Max price"
+  }
+}

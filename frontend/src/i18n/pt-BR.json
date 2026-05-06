@@ -1,0 +1,64 @@
+{
+  "app": {
+    "title": "ERP da Loja",
+    "logout": "Sair"
+  },
+  "menu": {
+    "dashboard": "Dashboard",
+    "produtos": "Produtos",
+    "clientes": "Clientes",
+    "categorias": "Categorias",
+    "vendas": "Vendas"
+  },
+  "auth": {
+    "login": {
+      "title": "Entrar",
+      "username": "Usuário",
+      "senha": "Senha",
+      "entrar": "Entrar",
+      "erro": "Usuário ou senha inválidos"
+    }
+  },
+  "dashboard": {
+    "titulo": "Painel",
+    "totalProdutos": "Produtos cadastrados",
+    "totalClientes": "Clientes cadastrados",
+    "vendasHoje": "Vendas hoje",
+    "faturamentoHoje": "Faturamento hoje"
+  },
+  "comum": {
+    "novo": "Novo",
+    "editar": "Editar",
+    "remover": "Remover",
+    "salvar": "Salvar",
+    "cancelar": "Cancelar",
+    "filtrar": "Filtrar",
+    "limpar": "Limpar",
+    "buscar": "Buscar",
+    "acoes": "Ações",
+    "carregando": "Carregando...",
+    "vazio": "Nenhum registro encontrado",
+    "confirmar": "Confirmar",
+    "confirmacaoRemocao": "Tem certeza que deseja remover este registro?"
+  },
+  "campos": {
+    "nome": "Nome",
+    "descricao": "Descrição",
+    "sku": "SKU",
+    "preco": "Preço",
+    "estoque": "Estoque",
+    "categoria": "Categoria",
+    "cpf": "CPF",
+    "email": "E-mail",
+    "telefone": "Telefone",
+    "cliente": "Cliente",
+    "produto": "Produto",
+    "quantidade": "Quantidade",
+    "valorTotal": "Valor total",
+    "dataVenda": "Data da venda",
+    "dataInicio": "Data início",
+    "dataFim": "Data fim",
+    "precoMin": "Preço mínimo",
+    "precoMax": "Preço máximo"
+  }
+}

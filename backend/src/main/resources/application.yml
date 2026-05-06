@@ -1,0 +1,66 @@
+# =============================================================================
+# Configuração principal — ERP da Loja
+# =============================================================================
+# Banco: PostgreSQL 18 rodando local em :5432, database "erp_loja".
+# Hibernate ddl-auto=update (DEV): cria/atualiza tabelas conforme as @Entity.
+# Em produção: trocar por "validate" e deixar o Flyway aplicar migrations.
+# =============================================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: erp-loja
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/erp_loja
+    username: userDBA
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Em Spring Boot 4, o autoconfig do Flyway está em módulo separado que
+      # ainda não é trivial de adicionar offline; mantemos ddl-auto=update e
+      # o schema fica documentado em src/main/resources/db/migration/V1__init_schema.sql.
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+# =============================================================================
+# Configurações da aplicação (JWT)
+# =============================================================================
+app:
+  jwt:
+    # ATENÇÃO: troque este segredo em produção. Mínimo 32 bytes para HS256.
+    secret: dGVzdGVfMjU2Yml0c19rZXlfZGV2ZWxvcG1lbnRvXzEyMw==4
+    expiration-ms: 3600000   # 1 hora
+  cors:
+    allowed-origins: http://localhost:5173
+
+# =============================================================================
+# Swagger / OpenAPI
+# =============================================================================
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# =============================================================================
+# Actuator
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
