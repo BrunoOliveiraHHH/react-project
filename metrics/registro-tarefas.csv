@@ -1,0 +1,4 @@
+id_teamwork,titulo,time_solicitante,tipo,impacto,data_abertura,data_fechamento,horas_trabalhadas,retrabalho,destaque,observacoes
+TW-1234,Botão de exportar relatório na tela X,Time A,feature-pequena,P2,2026-05-02,2026-05-04,3.5,nao,nao,
+TW-1235,Bug: filtro não respeita timezone,Time B,bug,P1,2026-05-03,2026-05-03,1.5,nao,sim,Destravou release do time B do dia 04/05
+TW-1240,Integrar serviço novo de envio de email,Time C,integracao,P2,2026-05-05,2026-05-12,12.0,sim,nao,Voltou 1x com falha em sandbox
